@@ -1,0 +1,980 @@
+
+SYSTEM DESIGN NOTES
+Topic 2: LOAD BALANCER
+Language: Node.js
+
+
+============================================================
+1. WHAT IS A LOAD BALANCER?
+============================================================
+
+A Load Balancer is a component that distributes incoming client requests
+across multiple application servers or instances.
+
+Instead of sending all requests to one server, it distributes traffic
+among multiple servers.
+
+Example:
+
+Without Load Balancer:
+
+        CLIENTS
+           |
+           v
+      +----------+
+      | SERVER 1 |
+      +----------+
+
+All requests go to Server 1.
+
+If Server 1 becomes overloaded, response time increases.
+
+With Load Balancer:
+
+        CLIENTS
+           |
+           v
+    +----------------+
+    | LOAD BALANCER |
+    +----------------+
+       /     |     \
+      v      v      v
+  +------+ +------+ +------+
+  |Node 1 | |Node 2| |Node 3|
+  +------+ +------+ +------+
+
+Requests are distributed across multiple application instances.
+
+
+============================================================
+2. WHY DO WE NEED A LOAD BALANCER?
+============================================================
+
+Suppose an application receives 10,000 requests.
+
+If only one server handles all requests:
+
+  CLIENTS
+     |
+     v
+  SERVER 1
+     |
+     v
+  10,000 REQUESTS
+
+The server may become overloaded.
+
+Instead, we use multiple application instances.
+
+  CLIENTS
+     |
+     v
+  LOAD BALANCER
+     |
+     +-----------------------+
+     |           |           |
+     v           v           v
+  SERVER 1    SERVER 2    SERVER 3
+
+Benefits:
+
+1. Traffic Distribution
+   Distributes requests across multiple application instances.
+
+2. Scalability
+   More application instances can be added when traffic increases.
+
+3. Availability
+   Traffic can be redirected away from unhealthy instances.
+
+4. Reduced Overload
+   Prevents all requests from being sent to a single application instance.
+
+5. Fault Tolerance
+   If one application instance fails, other healthy instances can
+   continue handling requests.
+
+
+============================================================
+3. HOW DOES A LOAD BALANCER WORK?
+============================================================
+
+Basic architecture:
+
+             CLIENTS
+                |
+                v
+        +------------------+
+        |  LOAD BALANCER  |
+        +------------------+
+           /      |      \
+          v       v       v
+       +------+ +------+ +------+
+       |Node 1 | |Node 2| |Node 3|
+       +------+ +------+ +------+
+
+Working:
+
+1. Client sends an HTTP request.
+
+2. Load balancer receives the request.
+
+3. Load balancer selects an application server according to its
+   configured algorithm.
+
+4. Selected server processes the request.
+
+5. Server sends the response back through the load balancer.
+
+6. Load balancer forwards the response to the client.
+
+Request Flow:
+
+CLIENT
+   |
+   | HTTP Request
+   v
+LOAD BALANCER
+   |
+   | Select Server
+   v
+APPLICATION SERVER
+   |
+   | Process Request
+   v
+LOAD BALANCER
+   |
+   | HTTP Response
+   v
+CLIENT
+
+
+============================================================
+4. LOAD BALANCING ALGORITHMS
+============================================================
+
+A load balancer uses an algorithm to decide which server should
+receive the next request.
+
+Common algorithms:
+
+A) ROUND ROBIN
+----------------
+
+Requests are distributed sequentially across servers.
+
+Example:
+
+Servers:
+  Node 1
+  Node 2
+  Node 3
+
+Requests:
+
+  Request 1 -> Node 1
+  Request 2 -> Node 2
+  Request 3 -> Node 3
+  Request 4 -> Node 1
+  Request 5 -> Node 2
+  Request 6 -> Node 3
+
+Diagram:
+
+            LOAD BALANCER
+                  |
+       +----------+----------+
+       |          |          |
+       v          v          v
+     Node 1     Node 2     Node 3
+
+Advantages:
+- Simple
+- Easy to implement
+- Distributes requests sequentially
+
+Disadvantages:
+- Does not consider server capacity
+- Does not consider current server workload
+- Requests may take different amounts of time to process
+
+
+B) WEIGHTED ROUND ROBIN
+------------------------
+
+Each server receives a weight.
+
+Servers with higher weights receive more requests.
+
+Example:
+
+Node 1: Weight 3
+Node 2: Weight 2
+Node 3: Weight 1
+
+Distribution:
+
+Node 1 -> 3 requests
+Node 2 -> 2 requests
+Node 3 -> 1 request
+
+Diagram:
+
+            LOAD BALANCER
+                  |
+       +----------+----------+
+       |          |          |
+       v          v          v
+   +--------+ +--------+ +--------+
+   | Node 1 | | Node 2 | | Node 3 |
+   | Weight3| | Weight2| | Weight1|
+   +--------+ +--------+ +--------+
+
+Advantages:
+- Can distribute more traffic to powerful servers
+- Useful when servers have different capacities
+
+Disadvantages:
+- Requires weight configuration
+- Does not automatically measure actual server workload
+
+
+C) LEAST CONNECTIONS
+--------------------
+
+Requests are sent to the server with the fewest active connections.
+
+Example:
+
+Node 1: 10 active connections
+Node 2:  4 active connections
+Node 3:  7 active connections
+
+Next request:
+
+  Request -> Node 2
+
+Diagram:
+
+            LOAD BALANCER
+                  |
+       +----------+----------+
+       |          |          |
+       v          v          v
+     Node 1     Node 2     Node 3
+    10 Active   4 Active   7 Active
+
+Advantages:
+- Considers active connections
+- Useful when requests take different amounts of time
+
+Disadvantages:
+- Active connection count does not always represent CPU workload
+- Requires connection tracking
+
+
+D) WEIGHTED LEAST CONNECTIONS
+------------------------------
+
+Combines server weights with active connection counts.
+
+Servers with greater capacity can handle more connections.
+
+Example:
+
+Node 1:
+  Weight = 3
+  Active connections = 10
+
+Node 2:
+  Weight = 1
+  Active connections = 5
+
+The load balancer considers both server capacity and connection load.
+
+Advantages:
+- Supports servers with different capacities
+- Considers active connections
+
+Disadvantages:
+- More complex than round robin
+- Requires configuration and connection tracking
+
+
+E) IP HASH
+------------
+
+The load balancer uses the client's IP address to select a server.
+
+Example:
+
+Client A -> Node 1
+Client B -> Node 2
+Client C -> Node 3
+
+If Client A sends another request, the same server may be selected.
+
+Diagram:
+
+CLIENT A
+   |
+   v
+LOAD BALANCER
+   |
+   v
+NODE 1
+
+CLIENT A
+   |
+   v
+LOAD BALANCER
+   |
+   v
+NODE 1
+
+Advantages:
+- Can provide consistent server selection for a client
+- Useful when application data is stored locally on a server
+
+Disadvantages:
+- Distribution may be uneven
+- Client IP may represent multiple users behind a proxy
+- Server changes can affect mapping
+
+Note:
+IP Hash does not guarantee that a client always reaches the same server
+under every configuration or server membership change.
+
+
+============================================================
+5. TYPES OF LOAD BALANCERS
+============================================================
+
+A) LAYER 4 LOAD BALANCER
+-------------------------
+
+Works at the transport layer.
+
+Usually distributes traffic based on:
+
+- IP address
+- TCP port
+- Network connection information
+
+Example:
+
+Client
+  |
+  v
+Layer 4 Load Balancer
+  |
+  +--------+--------+
+  |        |        |
+  v        v        v
+Server 1  Server 2  Server 3
+
+Characteristics:
+
+- Operates using network-level information
+- Does not need to inspect HTTP paths
+- Can distribute TCP connections
+
+
+B) LAYER 7 LOAD BALANCER
+-------------------------
+
+Works at the application layer.
+
+Can inspect application-level information such as:
+
+- HTTP URL
+- HTTP method
+- Headers
+- Hostname
+- Cookies
+
+Example:
+
+Client
+  |
+  v
+Layer 7 Load Balancer
+  |
+  +----------------------+
+  |                    |
+  v                    v
+/api/users           /api/products
+  |                    |
+  v                    v
+User Service        Product Service
+
+Characteristics:
+
+- Understands HTTP requests
+- Can route based on URL or hostname
+- Can support application-level routing
+- Can perform HTTP health checks
+
+
+============================================================
+6. HEALTH CHECKS
+============================================================
+
+A load balancer needs to identify unhealthy application instances.
+
+Health checks periodically verify whether servers are available.
+
+Example:
+
+  LOAD BALANCER
+       |
+       +----------+----------+
+       |          |          |
+       v          v          v
+    Node 1      Node 2     Node 3
+    Healthy     Unhealthy   Healthy
+
+Node 2 is unhealthy.
+
+The load balancer stops sending new traffic to Node 2 when its
+health-check configuration marks it unhealthy.
+
+Health Check Flow:
+
+1. Load balancer sends a health-check request.
+2. Application server responds.
+3. Load balancer evaluates the response.
+4. If the server is healthy, it remains available.
+5. If the server fails health checks, it is marked unhealthy.
+6. Traffic is sent to other healthy servers.
+
+Example health endpoint in Node.js:
+
+const express = require("express");
+
+const app = express();
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy"
+  });
+});
+
+app.listen(3000);
+
+Important:
+
+A health endpoint should indicate whether the application can serve
+requests.
+
+A simple health endpoint does not necessarily verify every dependency.
+
+Readiness checks and liveness checks may have different purposes.
+
+
+============================================================
+7. LOAD BALANCER AND NODE.JS CLUSTER
+============================================================
+
+Node.js Cluster and a Load Balancer are different concepts.
+
+Node.js Cluster:
+
+- Creates multiple Node.js worker processes.
+- Usually operates within one machine.
+- Allows multiple workers to use CPU cores.
+- Workers can share a server port through cluster.
+
+Load Balancer:
+
+- Distributes traffic across application instances.
+- Can operate across multiple machines.
+- Can route traffic to healthy instances.
+
+Diagram:
+
+              CLIENTS
+                 |
+                 v
+          LOAD BALANCER
+                 |
+       +---------+---------+
+       |                   |
+       v                   v
+    SERVER 1             SERVER 2
+       |                   |
+       v                   v
+   +---------+          +---------+
+   |Primary  |          |Primary  |
+   |Process  |          |Process  |
+   +---------+          +---------+
+      /   \                /   \
+     v     v              v     v
+  Worker Worker         Worker Worker
+    1      2              1      2
+
+The load balancer distributes traffic between servers.
+
+Each server can use Node.js Cluster to create multiple workers.
+
+Important:
+
+Cluster is process-level scaling.
+
+Load balancing is traffic distribution between application instances.
+
+They can be used together.
+
+
+============================================================
+8. NODE.JS LOAD BALANCER EXAMPLE
+============================================================
+
+We can create a simple demonstration using Node.js.
+
+This example uses:
+
+- One load balancer
+- Three backend application servers
+- Round-robin distribution
+
+This is a learning example, not a production-ready load balancer.
+
+
+STEP 1: CREATE BACKEND SERVERS
+------------------------------
+
+Create backend.js:
+
+const express = require("express");
+
+const app = express();
+
+const PORT = process.env.PORT;
+const SERVER_NAME = process.env.SERVER_NAME;
+
+app.get("/", (req, res) => {
+  res.json({
+    message: "Request handled successfully",
+    server: SERVER_NAME,
+    pid: process.pid
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
+    server: SERVER_NAME
+  });
+});
+
+app.listen(PORT, () => {
+  console.log(`${SERVER_NAME} running on port ${PORT}`);
+});
+
+
+STEP 2: START THREE BACKEND SERVERS
+-----------------------------------
+
+Run these commands in separate terminals.
+
+Terminal 1:
+
+PORT=3001 SERVER_NAME=Node1 node backend.js
+
+Terminal 2:
+
+PORT=3002 SERVER_NAME=Node2 node backend.js
+
+Terminal 3:
+
+PORT=3003 SERVER_NAME=Node3 node backend.js
+
+Windows PowerShell:
+
+Terminal 1:
+
+$env:PORT="3001"
+$env:SERVER_NAME="Node1"
+node backend.js
+
+Terminal 2:
+
+$env:PORT="3002"
+$env:SERVER_NAME="Node2"
+node backend.js
+
+Terminal 3:
+
+$env:PORT="3003"
+$env:SERVER_NAME="Node3"
+node backend.js
+
+
+STEP 3: CREATE LOAD BALANCER
+----------------------------
+
+Create loadbalancer.js:
+
+const express = require("express");
+
+const app = express();
+
+const servers = [
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://localhost:3003"
+];
+
+let currentServer = 0;
+
+app.get("/", async (req, res) => {
+  const server = servers[currentServer];
+
+  currentServer = (currentServer + 1) % servers.length;
+
+  try {
+    const response = await fetch(server);
+
+    const data = await response.json();
+
+    res.json(data);
+
+  } catch (error) {
+    res.status(502).json({
+      message: "Backend server unavailable"
+    });
+  }
+});
+
+app.listen(3000, () => {
+  console.log("Load balancer running on port 3000");
+});
+
+
+STEP 4: RUN LOAD BALANCER
+--------------------------
+
+node loadbalancer.js
+
+Open:
+
+http://localhost:3000
+
+Refresh multiple times.
+
+Expected output:
+
+Request 1:
+
+{
+  "message": "Request handled successfully",
+  "server": "Node1",
+  "pid": 1234
+}
+
+Request 2:
+
+{
+  "message": "Request handled successfully",
+  "server": "Node2",
+  "pid": 1235
+}
+
+Request 3:
+
+{
+  "message": "Request handled successfully",
+  "server": "Node3",
+  "pid": 1236
+}
+
+Request 4:
+
+{
+  "message": "Request handled successfully",
+  "server": "Node1",
+  "pid": 1234
+}
+
+The requests follow a round-robin sequence.
+
+Note:
+
+This demonstration does not implement production features such as
+health-check-based routing, connection pooling, timeouts, retries,
+or graceful shutdown.
+
+For production applications, a dedicated load balancer such as NGINX
+or a cloud load balancing service is commonly used.
+
+
+============================================================
+9. LOAD BALANCER FAILURE SCENARIOS
+============================================================
+
+A) APPLICATION SERVER FAILURE
+----------------------------
+
+Suppose Node 2 fails.
+
+Before:
+
+        LOAD BALANCER
+             |
+       +-----+-----+
+       |     |     |
+       v     v     v
+     Node 1 Node 2 Node 3
+            FAILED
+
+A health-aware load balancer can stop sending new requests to Node 2.
+
+Traffic continues through healthy instances.
+
+Important:
+
+A basic round-robin implementation without health checks may continue
+selecting a failed server.
+
+
+B) LOAD BALANCER FAILURE
+------------------------
+
+The load balancer itself can become a single point of failure.
+
+Diagram:
+
+        CLIENTS
+           |
+           v
+     LOAD BALANCER
+           |
+     +-----+-----+
+     |     |     |
+     v     v     v
+   Node 1 Node 2 Node 3
+
+If the only load balancer fails, clients may lose access to all
+application servers.
+
+Solution:
+
+Use a highly available load balancing setup.
+
+Example:
+
+        CLIENTS
+           |
+           v
+    +----------------+
+    | Load Balancer |
+    |   Instance 1  |
+    +----------------+
+           |
+           v
+    +----------------+
+    | Load Balancer |
+    |   Instance 2  |
+    +----------------+
+           |
+           v
+    APPLICATION SERVERS
+
+In practice, high availability can be implemented through managed
+load balancing services or redundant load balancer instances with
+appropriate failover.
+
+
+============================================================
+10. SESSION STICKINESS
+============================================================
+
+Session stickiness is also called sticky sessions.
+
+It attempts to send requests from the same client to the same
+application server.
+
+Example:
+
+Client A -> Node 1
+Client A -> Node 1
+Client A -> Node 1
+
+Client B -> Node 2
+Client B -> Node 2
+
+Diagram:
+
+             CLIENT A
+                |
+                v
+          LOAD BALANCER
+                |
+                v
+             NODE 1
+
+             CLIENT B
+                |
+                v
+          LOAD BALANCER
+                |
+                v
+             NODE 2
+
+Why is it used?
+
+Some applications store session information in local server memory.
+
+If requests reach a different server, that server may not have the
+session information.
+
+Sticky sessions can keep requests on the same server.
+
+Disadvantages:
+
+- Traffic may become uneven.
+- Server failure may interrupt sessions.
+- Scaling can become more difficult.
+
+Better approach:
+
+Store shared session information in Redis or another shared session
+store.
+
+Then requests can be handled by different application instances
+without depending on local session memory.
+
+
+============================================================
+11. LOAD BALANCER VS REVERSE PROXY
+============================================================
+
+LOAD BALANCER:
+
+Distributes incoming traffic across multiple backend instances.
+
+Example:
+
+CLIENT
+   |
+   v
+LOAD BALANCER
+   |
+   +--------+--------+
+   |        |        |
+   v        v        v
+Node 1    Node 2   Node 3
+
+
+REVERSE PROXY:
+
+Receives client requests and forwards them to backend servers.
+
+It can provide:
+
+- Request forwarding
+- TLS termination
+- Routing
+- Caching
+- Security controls
+
+Diagram:
+
+CLIENT
+   |
+   v
+REVERSE PROXY
+   |
+   v
+BACKEND SERVER
+
+Important:
+
+A reverse proxy can also act as a load balancer.
+
+NGINX is commonly used as both a reverse proxy and a load balancer.
+
+
+============================================================
+12. KEY TERMS
+============================================================
+
+Load Balancer:
+Distributes incoming traffic across application instances.
+
+Backend Server:
+A server that processes application requests.
+
+Round Robin:
+Selects servers sequentially.
+
+Weighted Round Robin:
+Distributes requests according to configured server weights.
+
+Least Connections:
+Selects the server with the fewest active connections.
+
+IP Hash:
+Uses client IP information to select a server.
+
+Health Check:
+Checks whether a server is available and healthy.
+
+Layer 4:
+Balances traffic using network and transport information.
+
+Layer 7:
+Balances traffic using application-level information.
+
+Sticky Session:
+Attempts to route a client's requests to the same server.
+
+Reverse Proxy:
+Receives client requests and forwards them to backend servers.
+
+
+============================================================
+13. QUICK REVISION
+============================================================
+
+Load Balancer:
+Distributes client traffic across application servers.
+
+Round Robin:
+Selects servers sequentially.
+
+Weighted Round Robin:
+Uses server weights.
+
+Least Connections:
+Selects the server with fewer active connections.
+
+Health Check:
+Identifies unhealthy servers.
+
+Layer 4:
+Works with network and transport information.
+
+Layer 7:
+Works with HTTP and application-level information.
+
+Node.js Cluster:
+Creates multiple Node.js worker processes.
+
+Sticky Session:
+Attempts to keep a client connected to the same server.
+
+MAIN LESSON:
+
+A load balancer distributes incoming traffic across multiple application
+instances.
+
+It helps applications scale horizontally and can improve availability.
+
+A load balancer does not replace application servers.
+
+It decides where incoming traffic should be sent.
+
+Node.js Cluster and Load Balancer can work together, but they solve
+different problems.

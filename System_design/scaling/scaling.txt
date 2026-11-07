@@ -1,0 +1,436 @@
+
+SYSTEM DESIGN NOTES
+Topic 1: SCALING
+Language: Node.js
+
+============================================================
+1. WHAT IS SCALING?
+============================================================
+
+Scaling means increasing an application's capacity to handle more users,
+requests, and workload.
+
+Example:
+
+100 users     -> Application works fine
+1,000 users   -> Response time may increase
+10,000 users  -> Server may become overloaded and crash
+
+We scale the system to handle increased traffic and workload.
+
+
+============================================================
+2. TYPES OF SCALING
+============================================================
+
+A) VERTICAL SCALING (SCALE UP)
+------------------------------
+
+Increase the resources of one server.
+
+Before:
+
++----------------------+
+|       SERVER        |
+|  2 CPU cores        |
+|  4 GB RAM           |
++----------------------+
+
+After:
+
++----------------------+
+|       SERVER        |
+|  8 CPU cores        |
+|  16 GB RAM          |
++----------------------+
+
+Advantages:
+- Simple to implement
+- Usually requires few or no application changes
+
+Disadvantages:
+- Hardware has a maximum capacity
+- More powerful servers can become expensive
+- One server can remain a single point of failure
+
+Diagram:
+
+       CLIENTS
+          |
+          v
+  +------------------+
+  |   ONE SERVER    |
+  | More CPU / RAM  |
+  +------------------+
+
+
+B) HORIZONTAL SCALING (SCALE OUT)
+---------------------------------
+
+Add more application instances or servers.
+
+Before:
+
+       CLIENTS
+          |
+          v
+  +------------------+
+  |   SERVER 1       |
+  +------------------+
+
+After:
+
+       CLIENTS
+          |
+          v
+  +------------------+
+  |  LOAD BALANCER   |
+  +------------------+
+      /     |     \
+     v      v      v
+  +------+ +------+ +------+
+  |Node 1 | |Node 2| |Node 3|
+  |Express| |Express| |Express|
+  +------+ +------+ +------+
+
+Advantages:
+- Can handle more traffic by adding instances
+- Can improve availability
+- Can scale across multiple machines
+
+Disadvantages:
+- More infrastructure and operational complexity
+- Application state must be shared or externalized
+- Traffic distribution is usually needed, commonly through a load balancer
+
+
+============================================================
+3. BASIC NODE.JS SERVER
+============================================================
+
+A single Node.js process handles incoming requests.
+
+Diagram:
+
+      CLIENT
+         |
+         v
+  +----------------------+
+  | Node.js Process     |
+  | Express Application |
+  +----------------------+
+         |
+         v
+      RESPONSE
+
+Example:
+
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
+
+app.listen(3000, () => {
+  console.log("Server running on port 3000");
+});
+
+This starts one Node.js application process.
+
+A single Node.js process executes JavaScript on its main thread.
+
+It does not automatically use all CPU cores for JavaScript execution.
+
+
+============================================================
+4. NODE.JS CLUSTERING
+============================================================
+
+Node.js Cluster can create multiple worker processes.
+
+Each worker:
+- Is a separate Node.js process
+- Has its own memory and event loop
+- Can execute JavaScript independently
+- Can share a server port through the cluster mechanism
+
+Diagram:
+
+              PRIMARY PROCESS
+                     |
+         +-----------+-----------+
+         |           |           |
+         v           v           v
+     +--------+  +--------+  +--------+
+     |Worker 1|  |Worker 2|  |Worker 3|
+     |Node.js |  |Node.js |  |Node.js |
+     +--------+  +--------+  +--------+
+         |           |           |
+         +-----------+-----------+
+                     |
+               Shared Port 3000
+
+Important:
+- Primary process manages workers
+- Each worker has separate memory
+- Multiple workers can use multiple CPU cores
+- Cluster distributes connections
+- Distribution is not guaranteed to be perfectly even for every request
+
+
+============================================================
+5. THE SHARED MEMORY PROBLEM
+============================================================
+
+Suppose every worker stores user sessions in local memory.
+
+Worker 1:
+loggedInUsers = ["Harsh"]
+
+Worker 2:
+loggedInUsers = []
+
+Worker 3:
+loggedInUsers = []
+
+Each worker has separate memory.
+
+If a user logs in through Worker 1, Worker 2 does not automatically know
+about that login.
+
+This causes problems when requests from the same user reach different
+workers.
+
+Solution:
+
+Store shared state in Redis or a database instead of relying only on
+process memory.
+
+
+============================================================
+6. SHARED DATA WITH REDIS AND DATABASE
+============================================================
+
+Multiple application instances can use shared external services.
+
+Diagram:
+
+              CLIENTS
+                 |
+                 v
+          +--------------+
+          | LOAD BALANCER|
+          +--------------+
+           /     |      \
+          v      v       v
+      +--------+ +--------+ +--------+
+      | Node 1 | | Node 2 | | Node 3 |
+      +--------+ +--------+ +--------+
+           |         |         |
+           +---------+---------+
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+    +-------------+       +-------------+
+    |    REDIS    |       |  DATABASE   |
+    | Cache/Session|      | Persistent  |
+    +-------------+       |    Data     |
+                          +-------------+
+
+Redis:
+- Shared cache
+- Session storage
+- Fast temporary data access
+
+Database:
+- Persistent application data
+- Users, orders, products, etc.
+
+Important:
+Redis and the database are separate services.
+
+Node.js connects to both independently.
+
+
+CACHE-ASIDE FLOW:
+
+           CLIENT
+              |
+              v
+           NODE.JS
+              |
+              v
+            REDIS
+              |
+       +------+------+
+       |             |
+    CACHE HIT    CACHE MISS
+       |             |
+       v             v
+  Return data    NODE.JS
+                     |
+                     v
+                  DATABASE
+                     |
+                     v
+               NODE.JS receives
+                     |
+                     v
+                Store in Redis
+                     |
+                     v
+               Return data
+
+Important:
+- Node.js communicates with Redis.
+- On a cache hit, Redis returns cached data to Node.js.
+- On a cache miss, Node.js fetches data from the database.
+- Node.js stores the fetched data in Redis.
+- Node.js returns the response to the client.
+- Redis does not automatically query the database on a cache miss.
+
+
+============================================================
+7. LOAD BALANCER
+============================================================
+
+A load balancer receives client traffic and forwards it to application
+instances.
+
+Diagram:
+
+             CLIENTS
+                |
+                v
+        +------------------+
+        |  LOAD BALANCER  |
+        +------------------+
+           /      |      \
+          v       v       v
+       +------+ +------+ +------+
+       | Node 1| | Node 2| | Node 3|
+       +------+ +------+ +------+
+
+Common responsibilities:
+- Distribute incoming traffic
+- Avoid sending traffic to unhealthy instances when health checks
+  are configured
+- Help support multiple application instances
+
+The load balancer does not make application code faster.
+
+It allows traffic to be handled by multiple instances.
+
+
+============================================================
+8. COMPLETE SCALING ARCHITECTURE
+============================================================
+
+                MANY CLIENTS
+                     |
+                     v
+            +------------------+
+            |  LOAD BALANCER  |
+            +------------------+
+               /     |      \
+              v      v       v
+         +--------+ +--------+ +--------+
+         | Node 1 | | Node 2 | | Node 3 |
+         | Express| | Express| | Express|
+         +--------+ +--------+ +--------+
+              |        |        |
+              +--------+--------+
+                       |
+            +----------+----------+
+            |                     |
+            v                     v
+      +-------------+       +-------------+
+      |    REDIS    |       |  DATABASE   |
+      | Cache/Session|      | Persistent  |
+      +-------------+       |    Data     |
+                            +-------------+
+
+Traffic Flow:
+
+1. Client sends a request.
+2. Load balancer receives it.
+3. Load balancer selects an application instance.
+4. Node.js instance processes the request.
+5. Node.js checks Redis when cached data is required.
+6. On a cache miss, Node.js fetches data from the database.
+7. Node.js may store the fetched data in Redis.
+8. Node.js returns the response to the client.
+
+Important:
+- Load balancer routes client traffic to Node.js instances.
+- Node.js communicates independently with Redis and the database.
+- Redis does not automatically forward requests to the database.
+- Not every request needs Redis or the database.
+
+
+============================================================
+9. KEY TERMS
+============================================================
+
+Scaling:
+Increasing application capacity to handle more workload.
+
+Vertical Scaling:
+Increasing resources of one server, such as CPU and RAM.
+
+Horizontal Scaling:
+Adding more servers or application instances.
+
+Node.js Cluster:
+Multiple Node.js worker processes on a machine.
+
+Load Balancer:
+Distributes incoming traffic across application instances.
+
+Redis:
+In-memory data store often used for cache and sessions.
+
+Database:
+Stores persistent application data.
+
+Stateless Application:
+Application instances do not depend on local memory for shared user state.
+
+Single Point of Failure:
+A component whose failure can make a system or critical part of it
+unavailable.
+
+
+============================================================
+10. QUICK REVISION
+============================================================
+
+Scale Up:
+One server + more resources
+
+Scale Out:
+More servers / instances
+
+Cluster:
+Multiple Node.js processes
+
+Load Balancer:
+Distributes traffic
+
+Redis:
+Shared cache / session store
+
+Database:
+Persistent shared data
+
+MAIN LESSON:
+
+Horizontal scaling adds application instances.
+
+Instances should not rely on their own local memory for shared user state.
+
+Node.js can use shared services such as Redis and a database.
+
+A load balancer commonly distributes traffic among application instances.
