@@ -1,0 +1,205 @@
+# Monolithic Architecture vs Microservices Architecture
+
+## 1. Monolithic Architecture
+
+A monolithic architecture is a software architecture in which all application components are developed, deployed, and executed as a single application.
+
+All modules, such as authentication, users, products, orders, and payments, are part of the same codebase and deployment unit.
+
+### Diagram
+
+```text
+             Client
+               |
+               v
+        Monolithic Application
+       +----------------------+
+       |   Authentication     |
+       |----------------------|
+       |   User Module        |
+       |----------------------|
+       |   Product Module     |
+       |----------------------|
+       |   Order Module       |
+       |----------------------|
+       |   Payment Module     |
+       +----------------------+
+               |
+               v
+           Database
+```
+
+### Advantages
+- Easy to develop and understand initially.
+- Simple deployment process.
+- Easier debugging in smaller applications.
+- Modules can communicate directly within the application.
+- Suitable for small applications and projects.
+
+### Disadvantages
+- The entire application must usually be deployed together.
+- Scaling individual modules independently is difficult.
+- A failure in one component can affect the entire application.
+- As the application grows, the codebase becomes harder to maintain.
+- Changes in one module may affect other modules.
+
+### Example
+An e-commerce application where authentication, products, orders, and payments are implemented inside one Node.js application.
+
+---
+
+## 2. Microservices Architecture
+
+Microservices architecture is a software architecture in which an application is divided into multiple small, independent services.
+
+Each service is responsible for a specific business functionality and can be developed, deployed, and scaled independently.
+
+Services communicate with each other using APIs or messaging systems.
+
+### Diagram
+
+```text
+                  Client
+                    |
+                    v
+               API Gateway
+                    |
+       +------------+------------+
+       |            |            |
+       v            v            v
+  User Service  Product Service  Order Service
+       |            |            |
+       v            v            v
+  User Database Product Database Order Database
+                    |
+                    v
+              Payment Service
+                    |
+                    v
+             Payment Database
+```
+
+### Advantages
+- Services can be deployed independently.
+- Individual services can be scaled independently.
+- Easier to maintain smaller, focused codebases.
+- Different services can use different technologies.
+- Failure in one service may not bring down the entire application.
+- Suitable for large and complex applications.
+
+### Disadvantages
+- More complex architecture.
+- Communication between services introduces network latency.
+- Requires service discovery, monitoring, and centralized logging.
+- Distributed transactions and data consistency are more difficult.
+- Deployment and debugging require more infrastructure.
+- Increased operational complexity.
+
+### Example
+An e-commerce application with separate User, Product, Order, and Payment services. Each service manages its own functionality and communicates with other services through APIs.
+
+---
+
+## 3. Difference Between Monolithic and Microservices Architecture
+
+| Feature | Monolithic Architecture | Microservices Architecture |
+|---|---|---|
+| Structure | Single application | Multiple independent services |
+| Codebase | Usually one codebase | Separate codebases or service modules |
+| Deployment | Entire application deployed together | Services deployed independently |
+| Scaling | Usually scales the whole application | Individual services can scale independently |
+| Communication | Internal function or module calls | Network communication through APIs or messaging |
+| Database | Commonly shared database | Services commonly own separate databases |
+| Technology | Usually one primary technology stack | Different technologies can be used |
+| Fault isolation | Failure may affect the entire application | Failures can be isolated between services |
+| Development | Simpler initially | More complex due to distributed systems |
+| Maintenance | Can become difficult as application grows | Easier to maintain focused services, but operations are more complex |
+| Best suited for | Small to medium applications | Large, complex applications with independent service needs |
+
+---
+
+## 4. Real-World Example
+
+Consider an e-commerce application.
+
+### Monolithic Architecture
+
+```text
+E-commerce Application
+|
++-- Authentication
++-- Users
++-- Products
++-- Orders
++-- Payments
++-- Notifications
+|
+Database
+```
+
+All functionalities are implemented inside one application.
+
+If the application needs more resources, the entire application may need to be scaled.
+
+### Microservices Architecture
+
+```text
+                    Client
+                      |
+                      v
+                 API Gateway
+                      |
+       +--------------+--------------+
+       |              |              |
+       v              v              v
+  User Service   Product Service   Order Service
+       |              |              |
+       v              v              v
+  User Database   Product Database  Order Database
+                                      |
+                                      v
+                                Payment Service
+                                      |
+                                      v
+                                Payment Database
+```
+
+Each service handles a specific business responsibility.
+
+For example:
+- User Service handles authentication and user information.
+- Product Service manages products and inventory.
+- Order Service manages customer orders.
+- Payment Service processes payments.
+
+---
+
+## 5. When to Use Each Architecture
+
+### Monolithic Architecture
+Use monolithic architecture when:
+- Building a small application.
+- Working with a small development team.
+- Developing an MVP or prototype.
+- The application has relatively simple business requirements.
+- You want simpler deployment and development.
+
+### Microservices Architecture
+Use microservices when:
+- The application has multiple independent business domains.
+- Different services require independent scaling.
+- Multiple teams work on different services.
+- Services need independent deployment.
+- The application has complex requirements and sufficient infrastructure.
+
+---
+
+## 6. Conclusion
+
+Monolithic architecture keeps the entire application in a single deployment unit, making it simpler to develop and deploy initially.
+
+Microservices architecture divides the application into independent services, allowing independent deployment, scaling, and development, but introducing additional complexity.
+
+**Monolithic architecture focuses on simplicity, while microservices architecture focuses on independent services and scalability.**
+
+Microservices are not automatically better than monolithic architecture. The appropriate choice depends on application size, complexity, team structure, and infrastructure requirements.
